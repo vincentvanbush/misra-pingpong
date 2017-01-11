@@ -9,7 +9,7 @@
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="scala-sdk-2.11.8" level="application" />
     <orderEntry type="library" name="com.typesafe.akka:akka-cluster_2.11:2.4.12" level="project" />
-    <orderEntry type="library" name="com.typesafe.akka:akka-remote_2.11:2.4.14" level="project" />
+    <orderEntry type="library" name="com.typesafe.akka:akka-remote_2.11:2.4.12" level="project" />
     <orderEntry type="library" name="io.netty:netty:3.10.6.Final" level="project" />
     <orderEntry type="library" name="com.typesafe.akka:akka-actor_2.11:2.4.12" level="project" />
   </component>

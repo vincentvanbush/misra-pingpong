@@ -2,7 +2,7 @@ import akka.actor.ActorRef
 
 abstract class Message
 
-case class Initialize(nodeId: Int, nextNode: ActorRef, totalNodes: Int) extends Message
+case class Initialize(nodeId: Int, nodes: List[ActorRef]) extends Message
 
 case class Ping(numPing: Int) extends Message
 

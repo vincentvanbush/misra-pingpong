@@ -40,8 +40,9 @@ class Node extends Actor {
   }
 
   def receive = {
-    case Initialize(id, next, total) => {
-      println(s"Initializing id=$id next=$next total=$total")
+    case Initialize(id, nodes) => {
+      val next = (nodes ::: List(nodes.head))(id + 1)
+      println(s"Initializing id=$id next=$next total=$nodes.size")
       nodeId = id
       nextNode = next
 
