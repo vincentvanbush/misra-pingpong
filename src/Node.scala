@@ -10,7 +10,6 @@ class Node extends Actor {
   var numNodes: Int = -1
   var totalNodes: Int = -1 // TODO: do the token thing modulo with this
   var nodeId: Int = -1
-  var prevM = 0
   val worker = context.actorOf(Props[Worker])
 
   def randomSleep(n: Double = 4) = {
@@ -71,8 +70,7 @@ class Node extends Actor {
       println(s"[$nodeId] m=$m rcv=$rcvPingNo")
       if (!discardIfObsolete(rcvPingNo, m)) {
         println(s"[$nodeId] noToken rx ping=$rcvPingNo m=$m")
-        prevM = m
-        worker ! PerformCS(nodeId)
+        worker ! PerformCS(nodeId, m)
         context.become(hasPing(rcvPingNo))
       }
     }
@@ -82,16 +80,12 @@ class Node extends Actor {
         println(s"[$nodeId] noToken rx pong=$rcvPongNo m=$m")
         if (rcvPongNo == m) { // regenerate ping if lost
           context.become(hasBoth(rcvPongNo - 1)) // we got only pong but as we regenerate the ping it's ours
-          prevM = m
-          worker ! PerformCS(nodeId)
+          worker ! PerformCS(nodeId, m)
         } else { // normal situation
           context.become(noToken(rcvPongNo))
           sendPong(rcvPongNo)
         }
       }
-    }
-    case _ => {
-      println("ddddd")
     }
   }
 
@@ -110,7 +104,7 @@ class Node extends Actor {
         context.become(hasBoth(rcvPongNo))
       }
     }
-    case LeaveCS => {
+    case LeaveCS(prevM) => {
       println(s"[$nodeId] hasPing rx leave m=$m")
       if (m == prevM) { // regenerate pong if lost
         context.become(noToken(-(m+1)))
@@ -120,9 +114,6 @@ class Node extends Actor {
         context.become(noToken(m))
         sendPing(m)
       }
-    }
-    case _ => {
-      println("jioxzcjvoicxj")
     }
   }
 
@@ -141,7 +132,7 @@ class Node extends Actor {
         println(s"${Console.RED}[$nodeId] hasBoth rx pong=$rcvPongNo m=$m${Console.RESET}")
       }
     }
-    case LeaveCS => {
+    case LeaveCS(_) => {
       // if we have both tokens, for sure the last one was a pong
       // and it is assumed the pingNo and pongNo have already been updated
       sendPing(-(m-1))

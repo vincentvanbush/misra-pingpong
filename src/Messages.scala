@@ -8,6 +8,6 @@ case class Ping(numPing: Int) extends Message
 
 case class Pong(numPong: Int) extends Message
 
-case object LeaveCS extends Message
+case class LeaveCS(prevM: Int) extends Message
 
-case class PerformCS(nodeId: Int) extends Message
+case class PerformCS(nodeId: Int, prevM: Int) extends Message
