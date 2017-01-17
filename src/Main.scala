@@ -22,6 +22,7 @@ object Main extends App {
   def runLocally(numNodes: Int) = {
     val nodes = (0 until numNodes).map(_ => system.actorOf(Props[Node]))
 
+    Thread.sleep(1000)
     (nodes, (0 until numNodes)).zipped.toList.map {
       case (node, index) => node ! Initialize(index, nodes.toList)
     }
@@ -42,8 +43,8 @@ object Main extends App {
   }
 
   // Run the thing locally for testing purposes
-//  runLocally(5)
+  runLocally(5)
 
   // Open a single instance
-  runRemote
+//  runRemote
 }

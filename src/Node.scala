@@ -1,16 +1,16 @@
 import akka.actor.{Actor, ActorRef, Props}
 
+import scala.util.Random
+
 /**
   * Created by mike on 05.01.17.
   */
 class Node extends Actor {
-  var m = 0
-  var pingNo = 0
-  var pongNo = 0
   var nextNode: ActorRef = null
   var numNodes: Int = -1
   var totalNodes: Int = -1 // TODO: do the token thing modulo with this
   var nodeId: Int = -1
+  var prevM = 0
   val worker = context.actorOf(Props[Worker])
 
   def randomSleep(n: Double = 4) = {
@@ -20,19 +20,27 @@ class Node extends Actor {
 
   def sendPing(v: Int) = {
     if (v < 0) throw new RuntimeException("Attempted to send negative ping")
-    randomSleep(1)
-    println(s"Node $nodeId: sending PING = $v")
-    nextNode ! Ping(v)
+    if (Random.nextInt(15) == 0) {
+      println(s"${Console.MAGENTA_B}${Console.WHITE}Node $nodeId: Ping lost!${Console.RESET}")
+    } else {
+      randomSleep(1)
+      println(s"Node $nodeId: sending PING = $v")
+      nextNode ! Ping(v)
+    }
   }
 
   def sendPong(v: Int) = {
     if (v > 0) throw new RuntimeException("Attempted to send positive pong")
-    randomSleep(0.5)
-    println(s"Node $nodeId: sending PONG = $v")
-    nextNode ! Pong(v)
+    if (Random.nextInt(15) == 0) {
+      println(s"${Console.BLUE_B}${Console.WHITE}Node $nodeId: Pong lost!${Console.RESET}")
+    } else {
+      randomSleep(2)
+      println(s"Node $nodeId: sending PONG = $v")
+      nextNode ! Pong(v)
+    }
   }
 
-  def discardIfObsolete(num: Int) = {
+  def discardIfObsolete(num: Int, m: Int) = {
     if (math.abs(num) < math.abs(m)) {
       println(s"Node $nodeId: received obsolete token = $num")
       true
@@ -52,87 +60,93 @@ class Node extends Actor {
         nextNode ! Pong(-1)
       }
 
-      context.become(noToken)
+      context.become(noToken(0))
     }
 
     case _ => throw new RuntimeException("Send an Initialize message before performing actions")
   }
 
-  def noToken: Receive = {
-    case Ping(numPing) => {
-      if (!discardIfObsolete(numPing)) {
-        println(s"[$nodeId] noToken rx ping=$numPing m=$m")
-        context.become(hasPing)
-        pingNo = numPing
+  def noToken(m: Int): Receive = {
+    case Ping(rcvPingNo) => {
+      println(s"[$nodeId] m=$m rcv=$rcvPingNo")
+      if (!discardIfObsolete(rcvPingNo, m)) {
+        println(s"[$nodeId] noToken rx ping=$rcvPingNo m=$m")
+        prevM = m
         worker ! PerformCS(nodeId)
+        context.become(hasPing(rcvPingNo))
       }
     }
-    case Pong(numPong) => {
-      if (!discardIfObsolete(numPong)) {
-        println(s"[$nodeId] noToken rx pong=$numPong m=$m")
-        pongNo = numPong
-        if (pongNo == m) { // regenerate ping if lost
-          pongNo = numPong - 1
-          pingNo = -pongNo
-          context.become(hasBoth) // we got only pong but as we regenerate the ping it's ours
+    case Pong(rcvPongNo) => {
+      println(s"[$nodeId] m=$m rcv=$rcvPongNo")
+      if (!discardIfObsolete(rcvPongNo, m)) {
+        println(s"[$nodeId] noToken rx pong=$rcvPongNo m=$m")
+        if (rcvPongNo == m) { // regenerate ping if lost
+          context.become(hasBoth(rcvPongNo - 1)) // we got only pong but as we regenerate the ping it's ours
+          prevM = m
           worker ! PerformCS(nodeId)
-          m = pongNo
         } else { // normal situation
-          sendPong(pongNo)
+          context.become(noToken(rcvPongNo))
+          sendPong(rcvPongNo)
         }
       }
     }
+    case _ => {
+      println("ddddd")
+    }
   }
 
-  def hasPing: Receive = {
-    case Ping(numPing) => {
-      if (!discardIfObsolete(numPing)) {
-        println(s"${Console.RED}[$nodeId] hasPing rx ping=$numPing m=$m${Console.RESET}")
+  def hasPing(m: Int): Receive = {
+    case Ping(rcvPingNo) => {
+      println(s"[$nodeId] m=$m rcv=$rcvPingNo")
+      if (!discardIfObsolete(rcvPingNo, m)) {
+        // This should never happen
+        println(s"${Console.RED}[$nodeId] hasPing rx ping=$rcvPingNo m=$m${Console.RESET}")
       }
     }
-    case Pong(numPong) => {
-      if (!discardIfObsolete(numPong)) {
-        println(s"[$nodeId] hasPing rx pong=$numPong m=$m")
-        context.become(hasBoth)
-        m = numPong
-        pongNo = numPong - 1
-        pingNo = -pongNo + 1
+    case Pong(rcvPongNo) => {
+      println(s"[$nodeId] m=$m rcv=$rcvPongNo")
+      if (!discardIfObsolete(rcvPongNo, m)) {
+        println(s"[$nodeId] hasPing rx pong=$rcvPongNo m=$m")
+        context.become(hasBoth(rcvPongNo))
       }
     }
     case LeaveCS => {
       println(s"[$nodeId] hasPing rx leave m=$m")
-      if (pingNo == m) { // regenerate pong if lost
-        pingNo += 1
-        pongNo -= 1
-        sendPing(pingNo)
-        sendPong(pongNo)
+      if (m == prevM) { // regenerate pong if lost
+        context.become(noToken(-(m+1)))
+        sendPing(m+1)
+        sendPong(-(m+1))
       } else { // normal situation
-        m = pingNo
-        sendPing(pingNo)
+        context.become(noToken(m))
+        sendPing(m)
       }
-      context.become(noToken)
+    }
+    case _ => {
+      println("jioxzcjvoicxj")
     }
   }
 
-  def hasBoth: Receive = {
-    case Ping(numPing) => {
-      if (!discardIfObsolete(numPing)) {
-        println(s"${Console.RED}[$nodeId] hasBoth rx ping=$numPing m=$m${Console.RESET}")
-
+  def hasBoth(m: Int): Receive = {
+    case Ping(rcvPingNo) => {
+      println(s"[$nodeId] m=$m rcv=$rcvPingNo")
+      if (!discardIfObsolete(rcvPingNo, m)) {
+        // this should never happen
+        println(s"${Console.RED}[$nodeId] hasBoth rx ping=$rcvPingNo m=$m${Console.RESET}")
       }
     }
-    case Pong(numPong) => {
-      if (!discardIfObsolete(numPong)) {
-        println(s"${Console.RED}[$nodeId] hasBoth rx pong=$numPong m=$m${Console.RESET}")
-
+    case Pong(rcvPongNo) => {
+      println(s"[$nodeId] m=$m rcv=$rcvPongNo")
+      if (!discardIfObsolete(rcvPongNo, m)) {
+        // this should never happen
+        println(s"${Console.RED}[$nodeId] hasBoth rx pong=$rcvPongNo m=$m${Console.RESET}")
       }
     }
     case LeaveCS => {
       // if we have both tokens, for sure the last one was a pong
       // and it is assumed the pingNo and pongNo have already been updated
-      sendPing(pingNo)
-      sendPong(pongNo)
-      context.become(noToken)
+      sendPing(-(m-1))
+      sendPong(m-1)
+      context.become(noToken(m-1))
     }
   }
 }

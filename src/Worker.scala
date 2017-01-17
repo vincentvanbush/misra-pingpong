@@ -9,7 +9,7 @@ class Worker extends Actor {
   def receive = {
     case PerformCS(nodeId) => {
       println(s"${Console.BLUE}[WORKER] Node $nodeId entering CS${Console.RESET}")
-      Thread.sleep(Random.nextInt(1900) + 100)
+      Thread.sleep(Random.nextInt(1900) + 1000)
       println(s"${Console.YELLOW}[WORKER] Node $nodeId leaving CS${Console.RESET}")
 
       sender ! LeaveCS
